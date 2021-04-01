@@ -4,6 +4,7 @@ import networkx as nx
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
+from dash.dependencies import Input, Output
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 
@@ -212,6 +213,7 @@ def create_network_graph():
         xanchor='center',
         x=0.45
     ))
+    fig.update_layout(clickmode='event+select')
 
 
     #App layout
@@ -219,16 +221,28 @@ def create_network_graph():
         html.H1(children = 'Singapore Data Visualization'),
         html.Div(children = 
         """ 
-        Network graph indicating unique cases and their respective connections throughout the begining months of the COVID-19 pandemic.
+        Network graph indicating unique cases and their respective connections throughout the begining months of the COVID-19 pandemic in 2020.
         """
         ),
         dcc.Graph(
             id='Graph', 
             figure=fig
-            )
+        ),
+        html.Div(children=[
+            html.H2(children = 'Last Clicked Case'),
+            html.Pre(id='click-data', style=styles['pre'])
+        ])
 
     ])
 
+
+    #clicked data callback function
+    @app.callback(
+    Output('click-data', 'children'),
+    Input('Graph', 'clickData'))
+    def display_click_data(clickData):
+        return json.dumps(clickData, indent=2)
+    
     #app.run_server(debug=True)
 
 
