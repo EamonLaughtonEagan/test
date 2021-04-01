@@ -177,15 +177,11 @@ def create_network_graph():
             ),
             line_width=2))
 
-    # callback function for updating points
-    # def update_point(trace, points, selector):
-
     node_trace.marker.color = node_adjacencies
     node_trace.text = node_text
 
     fig = go.Figure(data=[edge_trace, node_trace, january_node_trace, february_node_trace, march_node_trace],
                     layout=go.Layout(
-                        title='<br> Data Visualization ',
                         titlefont_size=36,
                         showlegend=True,
                         hovermode='closest',
@@ -200,10 +196,6 @@ def create_network_graph():
                                    tickson='boundaries', ticklen=10),
                         yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)))
 
-    app.layout = html.Div([
-        html.Div(dcc.Graph(id='Graph', figure=fig))
-
-    ])
 
     fig.update_layout(legend_title_text='OPTIONS')
     fig.update_layout(legend_bordercolor='black')
@@ -221,8 +213,23 @@ def create_network_graph():
         x=0.45
     ))
 
-    #app.run_server(debug=True)
-    # fig.show()
+
+    #App layout
+    app.layout = html.Div(children=[
+        html.H1(children = 'Singapore Data Visualization'),
+        html.Div(children = 
+        """ 
+        Network graph indicating unique cases and their respective connections throughout the begining months of the COVID-19 pandemic.
+        """
+        ),
+        dcc.Graph(
+            id='Graph', 
+            figure=fig
+            )
+
+    ])
+
+    app.run_server(debug=True)
 
 
 create_network_graph()
