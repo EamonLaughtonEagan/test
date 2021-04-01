@@ -225,7 +225,7 @@ def create_network_graph():
         x=0.45
     ))
 
-    app.run_server(debug=True)
+    #app.run_server(debug=True)
     # fig.show()
 
 
