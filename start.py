@@ -1,7 +1,6 @@
 import json
 import plotly.graph_objects as go
 import plotly.express as px
-import matplotlib.pyplot as plt
 import networkx as nx
 import pandas as pd
 import random
