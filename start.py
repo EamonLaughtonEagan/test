@@ -229,7 +229,7 @@ def create_network_graph():
 
     ])
 
-    app.run_server(debug=True)
+    #app.run_server(debug=True)
 
 
 create_network_graph()
