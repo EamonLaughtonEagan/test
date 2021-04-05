@@ -11,12 +11,14 @@ external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 server = app.server
 
+#style settings
 styles = {
     'pre': {
         'border': 'thin lightgrey solid',
         'overflowX': 'scroll'
     }
 }
+
 
 # SCHEMA: CASE_ID, LINKED_CASES, REPORT_DATE, LOCATION, PERSONAL_INFORMATION
 # LINKED_CASES: CASE 1, ..., CASE N
@@ -34,8 +36,12 @@ for i in range(len(data["DATA"])):
     location = data["DATA"][i]["LOCATION"]
     report_date = data["DATA"][i]["REPORT_DATE"]
     exposure = data["DATA"][i]["EXPOSURE"]
-
+    
+    #set the x-position of nodes to the dat of the case
     x_position = case_id
+    
+    
+    #set the y-position of nodes to the number of linked cases`
     if linked_cases == []:
         y_position = 0
     else:
@@ -93,7 +99,9 @@ def create_network_graph():
         name='January Cases',
         mode='markers',
         hoverinfo='text',
-        marker=dict(size=4))
+        marker=dict(size=4),
+        visible='legendonly')
+        
 
     # February Nodes
     feb_node_x = []
@@ -111,7 +119,8 @@ def create_network_graph():
         name='February Cases',
         mode='markers',
         hoverinfo='text',
-        marker=dict(size=4))
+        marker=dict(size=4),
+        visible='legendonly')
 
     # March Nodes
     mar_node_x = []
@@ -129,7 +138,8 @@ def create_network_graph():
         name='March Cases',
         mode='markers',
         hoverinfo='text',
-        marker=dict(size=4))
+        marker=dict(size=4),
+        visible='legendonly')
 
     # Color the node points and add hover information
     node_adjacencies = []
@@ -180,6 +190,15 @@ def create_network_graph():
 
     node_trace.marker.color = node_adjacencies
     node_trace.text = node_text
+    
+    
+    #adding shape figures over nodes to indicate where a clusters are
+    cluster_6_trace = go.Scatter(
+        x = [94, 132, 224],
+        y = [47, 50, 47],
+        fill = 'toself'
+    )
+
 
     fig = go.Figure(data=[edge_trace, node_trace, january_node_trace, february_node_trace, march_node_trace],
                     layout=go.Layout(
@@ -193,9 +212,28 @@ def create_network_graph():
                             x=0.005, y=- 0.002,
                             text='')],
 
-                        xaxis=dict(title='Case ID', showgrid=True, zeroline=False, showticklabels=True, ticks='outside',
-                                   tickson='boundaries', ticklen=10),
-                        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)))
+                        xaxis=dict(title='Date of Identified Case', 
+                                showgrid=True,
+                                gridwidth=1,
+                                gridcolor='black',
+                                zeroline=False,
+                                color='black',
+                                linecolor='black',
+                                mirror=True,
+                                
+                                   
+                                showticklabels=True,
+                                tickmode = 'array',
+                                tickvals = [1, 17, 103], #january, february, march
+                                ticktext = ['JAN', 'FEB', 'MAR']),
+                                   
+                        yaxis=dict(
+                                showgrid=False,
+                                zeroline=False,
+                                showticklabels=False,
+                                color='black',
+                                linecolor='black',
+                                )))
 
 
     fig.update_layout(legend_title_text='OPTIONS')
@@ -213,7 +251,17 @@ def create_network_graph():
         xanchor='center',
         x=0.45
     ))
+    
     fig.update_layout(clickmode='event+select')
+    
+  
+
+
+
+
+
+
+
 
 
     #App layout
@@ -227,6 +275,14 @@ def create_network_graph():
         dcc.Graph(
             id='Graph', 
             figure=fig
+        ),
+        dcc.Slider(
+            min=1,
+            max=10,
+            step=1,
+            marks={
+               
+            }
         ),
         html.Div(children=[
             html.H2(children = 'Last Clicked Case'),
@@ -243,7 +299,7 @@ def create_network_graph():
     def display_click_data(clickData):
         return json.dumps(clickData, indent=2)
     
-    #app.run_server(debug=True)
+    app.run_server(debug=True)
 
 
 create_network_graph()
