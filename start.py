@@ -1,7 +1,10 @@
 import json
+import pandas as pd
 import plotly.graph_objects as go
+import plotly.express as px
 import networkx as nx
 import dash
+import dash_cytoscape as cyto
 import dash_core_components as dcc
 import dash_html_components as html
 from dash.dependencies import Input, Output
@@ -25,281 +28,126 @@ styles = {
 # PERSONAL_INFORMATION: FIRST_NAME, LAST_NAME
 with open('Singapore_Data.json') as f:
     data = json.load(f)
-singapore_dict = json.dumps(data, indent=3)
 
-G = nx.Graph()
-node_edge_pair = []
-for i in range(len(data["DATA"])):
+df = pd.json_normalize(data['DATA'])
+df_cluster = pd.json_normalize(data['CLUSTER'])
+clusters = []
+for i in range(len(df_cluster)):
+    clusters.append(df_cluster['LOCATION'][i])
+#print(df_cluster['CASE_IDS'], df_cluster['LOCATION'])
 
-    case_id = data["DATA"][i]["CASE_ID"]
-    linked_cases = data["DATA"][i]["LINKED_CASES"]
-    location = data["DATA"][i]["LOCATION"]
-    report_date = data["DATA"][i]["REPORT_DATE"]
-    exposure = data["DATA"][i]["EXPOSURE"]
-    
-    #set the x-position of nodes to the dat of the case
-    x_position = case_id
-    
-    
-    #set the y-position of nodes to the number of linked cases`
-    if linked_cases == []:
-        y_position = 0
-    else:
-        y_position = len(linked_cases)
-
-    G.add_node(case_id, location=location, report_date=report_date, exposure=exposure, pos=(x_position, y_position))
-
-    # Adding edges to all of the nodes
-    if linked_cases != []:
-        for j in range(len(linked_cases)):
-            if case_id != linked_cases[j]:
-                node_edge_pair = (case_id, linked_cases[j])
-                G.add_edge(node_edge_pair[0], node_edge_pair[1])
-
-print("Number of NODES: ", G.number_of_nodes())
-print("Number of EDGES: ", G.number_of_edges())
+#################################################################################
+#create a column in the data frame for the length each linked case for each case#
+len_linked_cases = []
+for i in range(len(df)):
+    length = 0
+    for j in range(len(df['LINKED_CASES'][i])):
+        length += 1
+    len_linked_cases.append(length)
+df['LEN_LINKED_CASES'] = len_linked_cases
+#################################################################################
 
 
-def create_network_graph():
-    edge_x = []
-    edge_y = []
-    # rint(G.nodes())
-    for edge in G.edges():
-        x0, y0 = G.nodes[edge[0]]['pos']
-        # print("x0, y0", x0, y0)
-        x1, y1 = G.nodes[edge[1]]['pos']
-        # print("x1, y1", x1, y1)
-        edge_x.append(x0)
-        edge_x.append(x1)
-        edge_x.append(None)
-        edge_y.append(y0)
-        edge_y.append(y1)
-        edge_y.append(None)
+fig = go.Figure()
+fig.update_layout(
+    autosize=False,
+    hovermode='closest',
+    margin=dict(b=5, l=40, r=5, t=50),
+    annotations=[dict(showarrow=False, xref="paper", yref="paper",x=0.005, y=- 0.002)])
 
-    edge_trace = go.Scatter(
-        x=edge_x, y=edge_y,
-        name='Case Links',
-        line=dict(width=0.5, color='#888'),
-        hoverinfo='text',
-        mode='lines')
 
-    # January Nodes
-    jan_node_x = []
-    jan_node_y = []
-    for jan_node in G.nodes():
-        if G.nodes[jan_node]['report_date']['MONTH'] == 'JAN':
-            x, y = G.nodes[jan_node]['pos']
-            # if G.in_degree(jan_node) and G.out_degree(jan_node) == 0:
-            #    y = 0
-            jan_node_x.append(x)
-            jan_node_y.append(y)
 
-    january_node_trace = go.Scatter(
-        x=jan_node_x, y=jan_node_y,
-        name='January Cases',
-        mode='markers',
-        hoverinfo='text',
-        marker=dict(size=4),
-        visible='legendonly')
+app.layout = html.Div([
+    html.H1('Singapore Data Visualization'),
+    html.P('Graph indicating unique cases and their respective connections throughout the begining months of the COVID-19 pandemic in 2020.'),
+    dcc.Graph(id='graph'),
+    html.P('Selected Date(s)'),
+    dcc.RangeSlider(
+        id='range-slider',
+        min=0, max=len(df), step=1,
+        marks={
+          0: str(df['REPORT_DATE.MONTH'][0]) + ' ' + str(df['REPORT_DATE.DAY'][0]),
+          len(df)/2: str(df['REPORT_DATE.MONTH'][(len(df)-1)/2]) + ' ' + str(df['REPORT_DATE.DAY'][(len(df)-1)/2]),
+          len(df): str(df['REPORT_DATE.MONTH'][len(df)-1]) + ' ' + str(df['REPORT_DATE.DAY'][len(df)-1])},
+        #marks={x: str(x) for x in df['CASE_ID']},
+        value=[0, 101] 
+    ),
+    html.Div(children=[
+        html.H2('Current range of Dates'),
+        html.H3(id='range-of-dates')
+    ]),
+    html.Div(children=[
+        html.H4('Cluster Data'),
+        html.H5(id='hover-data', style=styles['pre'])
+    ]),
+])
+
+@app.callback(
+    Output('graph', 'figure'),
+    Input('range-slider', 'value'))
+def update_node_graph(slider_range):
+    dff = df
+    low, high = slider_range
+    mask = (dff['CASE_ID'] > low) & (dff['CASE_ID'] < high)
+    fig = px.scatter(
+        dff[mask], x='CASE_ID', y = 'LEN_LINKED_CASES', custom_data=['CASE_ID', 'LINKED_CASES', 'EXPOSURE', 'LOCATION'],
+        color='LOCATION', size='LEN_LINKED_CASES', height=500, width=1500,
+        hover_data=['LINKED_CASES'])
+    fig.update_traces(
+    hovertemplate='<br>'.join([
+        'Case ID: %{customdata[0]}',
+        'Linked Cases: %{customdata[1]}',
+        'Exposure: %{customdata[2]}',
+        'Location: %{customdata[3]}'
+    ]))
+    fig.update_layout(
+        yaxis=dict(
+            title='Number of Linked Cases',
+            showgrid=False,
+            gridwidth=1,
+            zeroline=False,
+            color='black',
+            linecolor='black',
+            mirror=True),
+            
+        xaxis=dict(
+            title='Case Number',
+            showgrid=False,
+            gridwidth=1,
+            #gridcolor='black',
+            zeroline=False,
+            color='black',
+            linecolor='black',
+            mirror=True),
         
+        legend=dict(
+            x=1, y=1, title_text='Locations', bordercolor='black', borderwidth=1,
+        ),
 
-    # February Nodes
-    feb_node_x = []
-    feb_node_y = []
-    for feb_node in G.nodes():
-        if G.nodes[feb_node]['report_date']['MONTH'] == 'FEB':
-            x, y = G.nodes[feb_node]['pos']
-            # if G.in_degree(feb_node) and G.out_degree(feb_node) == 0:
-            #    y = 0
-            feb_node_x.append(x)
-            feb_node_y.append(y)
-
-    february_node_trace = go.Scatter(
-        x=feb_node_x, y=feb_node_y,
-        name='February Cases',
-        mode='markers',
-        hoverinfo='text',
-        marker=dict(size=4),
-        visible='legendonly')
-
-    # March Nodes
-    mar_node_x = []
-    mar_node_y = []
-    for mar_node in G.nodes():
-        if G.nodes[mar_node]['report_date']['MONTH'] == 'MAR':
-            x, y = G.nodes[mar_node]['pos']
-            # if G.in_degree(mar_node) and G.out_degree(mar_node) == 0:
-            #    y = 0
-            mar_node_x.append(x)
-            mar_node_y.append(y)
-
-    march_node_trace = go.Scatter(
-        x=mar_node_x, y=mar_node_y,
-        name='March Cases',
-        mode='markers',
-        hoverinfo='text',
-        marker=dict(size=4),
-        visible='legendonly')
-
-    # Color the node points and add hover information
-    node_adjacencies = []
-    node_text = []
-    count = 0
-    for node, adjacencies in enumerate(G.adjacency()):
-        count += 1  # iterate before indexing since nodes start at 1
-        node_adjacencies.append(len(adjacencies[1]))
-        node_text.append('Case ID = ' + str(node + 1)
-                         + ', Number of linked cases = ' + str(len(adjacencies[1]))
-                         + ', Exposure = ' + str(G.nodes[count]['exposure'])
-                         + ', Date = ' + str(G.nodes[count]['report_date']['MONTH']) + ', ' + str(
-            G.nodes[count]['report_date']['DAY'])
-                         + ', Location = ' + str(G.nodes[count]['location']))
-
-    # for node in range(len(node_adjacencies)):
-
-    node_x = []
-    node_y = []
-    for node in G.nodes():
-        x, y = G.nodes[node]['pos']
-        # print("x, y", x, y)
-        node_x.append(x)
-        node_y.append(y)
-
-    node_trace = go.Scatter(
-        x=node_x, y=node_y,
-        name='Cases',
-        mode='markers',
-        hoverinfo='text',
-        marker=dict(
-            showscale=True,
-            # colorscale options
-            # 'Greys' | 'YlGnBu' | 'Greens' | 'YlOrRd' | 'Bluered' | 'RdBu' |
-            # 'Reds' | 'Blues' | 'Picnic' | 'Rainbow' | 'Portland' | 'Jet' |
-            # 'Hot' | 'Blackbody' | 'Earth' | 'Electric' | 'Viridis' |
-            colorscale='RdBu',
-            reversescale=True,
-            color=[],
-            size=10,
-            colorbar=dict(
-                thickness=25,
-                title='Number of Linked Cases',
-                xanchor='center',
-                titleside='right'
-            ),
-            line_width=2))
-
-    node_trace.marker.color = node_adjacencies
-    node_trace.text = node_text
-    
-    
-    #adding shape figures over nodes to indicate where a clusters are
-    cluster_6_trace = go.Scatter(
-        x = [94, 132, 224],
-        y = [47, 50, 47],
-        fill = 'toself'
+        clickmode='event+select',
     )
+    return fig
 
+@app.callback(
+    Output('range-of-dates', 'children'),
+    Input('range-slider', 'value'))
+def update_dates(slider_range):
+    low, high = slider_range
+    container =  df['REPORT_DATE.MONTH'][low] + ' ' + str(df['REPORT_DATE.DAY'][low]) + ' - ' + df['REPORT_DATE.MONTH'][high] + ' ' + str(df['REPORT_DATE.DAY'][high])
+    return container
 
-    fig = go.Figure(data=[edge_trace, node_trace, january_node_trace, february_node_trace, march_node_trace],
-                    layout=go.Layout(
-                        titlefont_size=36,
-                        showlegend=True,
-                        hovermode='closest',
-                        margin=dict(b=5, l=40, r=5, t=50),
-                        annotations=[dict(
-                            showarrow=False,
-                            xref="paper", yref="paper",
-                            x=0.005, y=- 0.002,
-                            text='')],
+@app.callback(
+    Output('hover-data', 'children'),
+    Input('graph', 'hoverData'))
+def show_cluster(clicked_case):
+    try:
+        is_cluster = clicked_case['points'][0]['customdata'][3]
+        if is_cluster in clusters:
+            return json.dumps(is_cluster, indent=2)
+        #elif is cluster in clusters and 
+        else:
+            return 'Case is not part of a cluster'
+    except TypeError:
+        pass
 
-                        xaxis=dict(title='Date of Identified Case', 
-                                showgrid=True,
-                                gridwidth=1,
-                                gridcolor='black',
-                                zeroline=False,
-                                color='black',
-                                linecolor='black',
-                                mirror=True,
-                                
-                                   
-                                showticklabels=True,
-                                tickmode = 'array',
-                                tickvals = [1, 17, 103], #january, february, march
-                                ticktext = ['JAN', 'FEB', 'MAR']),
-                                   
-                        yaxis=dict(
-                                showgrid=False,
-                                zeroline=False,
-                                showticklabels=False,
-                                color='black',
-                                linecolor='black',
-                                )))
-
-
-    fig.update_layout(legend_title_text='OPTIONS')
-    fig.update_layout(legend_bordercolor='black')
-    fig.update_layout(legend=dict(
-        yanchor='top',
-        y=0.99,
-        xanchor='left',
-        x=0.01
-    ))
-
-    fig.update_layout(title=dict(
-        yanchor='top',
-        y=1.00,
-        xanchor='center',
-        x=0.45
-    ))
-    
-    fig.update_layout(clickmode='event+select')
-    
-  
-
-
-
-
-
-
-
-
-
-    #App layout
-    app.layout = html.Div(children=[
-        html.H1(children = 'Singapore Data Visualization'),
-        html.Div(children = 
-        """ 
-        Network graph indicating unique cases and their respective connections throughout the begining months of the COVID-19 pandemic in 2020.
-        """
-        ),
-        dcc.Graph(
-            id='Graph', 
-            figure=fig
-        ),
-        dcc.Slider(
-            min=1,
-            max=10,
-            step=1,
-            marks={
-               
-            }
-        ),
-        html.Div(children=[
-            html.H2(children = 'Last Clicked Case'),
-            html.Pre(id='click-data', style=styles['pre'])
-        ])
-
-    ])
-
-
-    #clicked data callback function
-    @app.callback(
-    Output('click-data', 'children'),
-    Input('Graph', 'clickData'))
-    def display_click_data(clickData):
-        return json.dumps(clickData, indent=2)
-    
-    app.run_server(debug=True)
-
-
-create_network_graph()
+app.run_server(debug=True)
